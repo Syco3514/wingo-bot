@@ -8,17 +8,22 @@ app = Flask(__name__)
 CORS(app)
 
 API_URL = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.json"
+
+# Advanced Real-Browser Headers to bypass Cloud Server Block
 HEADERS = {
     "Accept": "application/json, text/plain, */*",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
     "Referer": "https://pakgames.pro/",
     "Origin": "https://pakgames.pro",
-    "User-Agent": "Mozilla/5.0"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Connection": "keep-alive"
 }
 
 TOTAL_LOGICS = 500
 LOOKBACK_TRENDS = 50
 
-# Trackers for 500 logics
 logic_stats = {i: {"total_predictions": 0, "correct_predictions": 0, "accuracy": 100.0} for i in range(TOTAL_LOGICS)}
 
 dashboard_data = {
@@ -79,15 +84,23 @@ def background_brain_runner():
     last_processed_issue = None
     stage = 1
     amount = base_amount
+    
+    # Using Session for connection persistence
+    session = requests.Session()
 
     while True:
         try:
             ts = int(time.time() * 1000)
-            res = requests.get(f"{API_URL}?ts={ts}&pageSize=60", headers=HEADERS, timeout=10)
+            # Fetch with timeout and custom headers session
+            res = session.get(f"{API_URL}?ts={ts}&pageSize=60", headers=HEADERS, timeout=15)
             data = res.json()
 
-            if data.get("code") == 0:
+            if data.get("code") == 0 and "data" in data and "list" in data["data"]:
                 history = data["data"]["list"]
+                if not history:
+                    time.sleep(5)
+                    continue
+                    
                 latest = history[0]
                 issue = latest["issueNumber"]
 
@@ -112,7 +125,8 @@ def background_brain_runner():
                         logic_stats[idx]["total_predictions"] += 1
                         if vote == actual_res:
                             logic_stats[idx]["correct_predictions"] += 1
-                        logic_stats[idx]["accuracy"] = (logic_stats[idx]["correct_predictions"] / logic_stats[idx]["total_predictions"]) * 100
+                        if logic_stats[idx]["total_predictions"] > 0:
+                            logic_stats[idx]["accuracy"] = (logic_stats[idx]["correct_predictions"] / logic_stats[idx]["total_predictions"]) * 100
 
                 fresh_votes = execute_500_logics(history)
                 t_data = {
@@ -143,7 +157,10 @@ def background_brain_runner():
 
                 new_preds = {}
                 for tier_name, metrics in t_data.items():
-                    pred = "BIG" if metrics["b_w"] >= metrics["s_w"] else "SMALL" if metrics["cnt"] > 0 else "WAIT"
+                    if metrics["cnt"] > 0:
+                        pred = "BIG" if metrics["b_w"] >= metrics["s_w"] else "SMALL"
+                    else:
+                        pred = "WAIT"
                     new_preds[tier_name] = pred
                     dashboard_data["tiers"][tier_name] = {
                         "prediction": pred, "votes_big": metrics["b_w"], "votes_small": metrics["s_w"], "active_count": metrics["cnt"]
@@ -152,10 +169,12 @@ def background_brain_runner():
                 current_predictions_held = new_preds
                 dashboard_data.update({"last_issue": issue, "actual_number": actual_num, "actual_result": actual_res, "stage": stage, "investment": amount})
                 last_processed_issue = issue
+            else:
+                print("API response error or invalid code structure.")
 
         except Exception as e:
-            print(f"Loop Error: {str(e)}")
-        time.sleep(2)
+            print(f"Bypasser Loop Error: {str(e)}")
+        time.sleep(3)
 
 threading.Thread(target=background_brain_runner, daemon=True).start()
 
@@ -246,20 +265,22 @@ HTML_UI = """
             fetch('/api/live_data')
                 .then(response => response.json())
                 .then(data => {
-                    document.getElementById('lbl-issue').innerText = "#" + (data.last_issue || '----');
-                    document.getElementById('lbl-num').innerText = data.actual_number || '--';
-                    document.getElementById('lbl-res').innerText = data.actual_result || '--';
-                    document.getElementById('lbl-stage').innerText = data.stage;
-                    document.getElementById('lbl-capital').innerText = data.investment;
+                    if(data.last_issue){
+                        document.getElementById('lbl-issue').innerText = "#" + data.last_issue;
+                        document.getElementById('lbl-num').innerText = data.actual_number;
+                        document.getElementById('lbl-res').innerText = data.actual_result;
+                        document.getElementById('lbl-stage').innerText = data.stage;
+                        document.getElementById('lbl-capital').innerText = data.investment;
 
-                    for (const [tierName, metrics] of Object.entries(data.tiers)) {
-                        const predElement = document.getElementById(tierName + '-pred');
-                        predElement.innerText = metrics.prediction;
-                        predElement.className = 'pred-val ' + metrics.prediction;
+                        for (const [tierName, metrics] of Object.entries(data.tiers)) {
+                            const predElement = document.getElementById(tierName + '-pred');
+                            predElement.innerText = metrics.prediction;
+                            predElement.className = 'pred-val ' + metrics.prediction;
 
-                        document.getElementById(tierName + '-count').innerText = metrics.active_count;
-                        document.getElementById(tierName + '-big').innerText = metrics.votes_big;
-                        document.getElementById(tierName + '-small').innerText = metrics.votes_small;
+                            document.getElementById(tierName + '-count').innerText = metrics.active_count;
+                            document.getElementById(tierName + '-big').innerText = metrics.votes_big;
+                            document.getElementById(tierName + '-small').innerText = metrics.votes_small;
+                        }
                     }
                 })
                 .catch(error => console.error('Data Sync Error:', error));
@@ -272,4 +293,4 @@ HTML_UI = """
 """
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=7860)
+    app.run(host='0.0.0.0', port=10000)
