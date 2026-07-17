@@ -1,6 +1,7 @@
 import threading
 import time
 import requests
+import random
 from flask import Flask, jsonify, render_template_string
 from flask_cors import CORS
 
@@ -11,10 +12,10 @@ API_URL = "https://draw.ar-lottery01.com/WinGo/WinGo_30S/GetHistoryIssuePage.jso
 
 HEADERS = {
     "Accept": "application/json, text/plain, */*",
-    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Language": "en-US,en;q=0.9,ur;q=0.8",
     "Referer": "https://pakgames.pro/",
     "Origin": "https://pakgames.pro",
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    "User-Agent": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
 }
 
 TOTAL_LOGICS = 500
@@ -40,8 +41,23 @@ current_predictions_held = {}
 base_amount = 10
 multiplier = 3
 
+# Realtime dynamic proxy storage
+scraped_proxies = []
+
 def bs(num):
     return "SMALL" if int(num) <= 4 else "BIG"
+
+def fetch_fresh_proxies():
+    """Internet se automatically free proxies scrape karne ka engine"""
+    global scraped_proxies
+    try:
+        # Free public proxy list API
+        res = requests.get("https://api.proxyscrape.com/v2/?request=displayproxies&protocol=http&timeout=10000&country=all&ssl=all&anonymity=all", timeout=10)
+        if res.status_code == 200:
+            list_p = res.text.strip().split("\n")
+            scraped_proxies = [p.strip() for p in list_p if p.strip()]
+    except Exception:
+        pass
 
 def execute_500_logics(history_list):
     votes = {}
@@ -76,112 +92,120 @@ def execute_500_logics(history_list):
     return votes
 
 def background_brain_runner():
-    global dashboard_data, current_predictions_held, logic_stats
+    global dashboard_data, current_predictions_held, logic_stats, scraped_proxies
     last_processed_issue = None
     stage = 1
     amount = base_amount
     
-    # Render IP block bypass karne ke liye multiple proxy fallbacks
-    proxy_list = [
-        None,  # Direct check pehle
-        {"http": "http://all.proxies.live:80"},
-        {"http": "http://185.199.110.133:80"},
-        {"http": "http://95.211.175.167:80"}
-    ]
+    fetch_fresh_proxies()
 
     while True:
         data_fetched = False
-        for current_proxy in proxy_list:
-            try:
-                ts = int(time.time() * 1000)
-                url = f"{API_URL}?ts={ts}&pageSize=60"
-                
-                # Request sending with optional proxy structure
-                if current_proxy:
-                    res = requests.get(url, headers=HEADERS, proxies=current_proxy, timeout=7)
-                else:
-                    res = requests.get(url, headers=HEADERS, timeout=7)
-                
-                data = res.json()
+        
+        # Agar proxy list khatam ho jaye toh naye proxies scrape karo
+        if not scraped_proxies:
+            fetch_fresh_proxies()
+            if not scraped_proxies:
+                time.sleep(5)
+                continue
+        
+        # Har request ke liye random proxy select karein
+        proxy_ip = random.choice(scraped_proxies)
+        proxies = {
+            "http": f"http://{proxy_ip}",
+            "https://": f"http://{proxy_ip}"
+        }
 
-                if data.get("code") == 0 and "data" in data and "list" in data["data"]:
-                    history = data["data"]["list"]
-                    if not history: continue
-                        
-                    latest = history[0]
-                    issue = latest["issueNumber"]
+        try:
+            ts = int(time.time() * 1000)
+            url = f"{API_URL}?ts={ts}&pageSize=60"
+            
+            # API request with dynamic rotator proxy
+            res = requests.get(url, headers=HEADERS, proxies=proxies, timeout=5)
+            data = res.json()
 
-                    if issue == last_processed_issue:
-                        data_fetched = True
-                        break
-
-                    actual_num = latest["number"]
-                    actual_res = bs(actual_num)
+            if data.get("code") == 0 and "data" in data and "list" in data["data"]:
+                history = data["data"]["list"]
+                if not history: continue
                     
-                    if last_processed_issue is not None and current_predictions_held:
-                        main_pred = current_predictions_held.get("all_500")
-                        if main_pred == actual_res:
-                            stage = 1
-                            amount = base_amount
-                        else:
-                            stage += 1
-                            amount = base_amount * (multiplier ** (stage - 1))
+                latest = history[0]
+                issue = latest["issueNumber"]
 
-                        past_votes = execute_500_logics(history[1:])
-                        for idx, vote in past_votes.items():
-                            logic_stats[idx]["total_predictions"] += 1
-                            if vote == actual_res:
-                                logic_stats[idx]["correct_predictions"] += 1
-                            if logic_stats[idx]["total_predictions"] > 0:
-                                logic_stats[idx]["accuracy"] = (logic_stats[idx]["correct_predictions"] / logic_stats[idx]["total_predictions"]) * 100
+                if issue == last_processed_issue:
+                    data_fetched = True
+                    time.sleep(2)
+                    continue
 
-                    fresh_votes = execute_500_logics(history)
-                    t_data = {
-                        "all_500": {"b_w": 0, "s_w": 0, "cnt": 0},
-                        "tier_90": {"b_w": 0, "s_w": 0, "cnt": 0},
-                        "tier_80": {"b_w": 0, "s_w": 0, "cnt": 0},
-                        "tier_70": {"b_w": 0, "s_w": 0, "cnt": 0},
+                actual_num = latest["number"]
+                actual_res = bs(actual_num)
+                
+                if last_processed_issue is not None and current_predictions_held:
+                    main_pred = current_predictions_held.get("all_500")
+                    if main_pred == actual_res:
+                        stage = 1
+                        amount = base_amount
+                    else:
+                        stage += 1
+                        amount = base_amount * (multiplier ** (stage - 1))
+
+                    past_votes = execute_500_logics(history[1:])
+                    for idx, vote in past_votes.items():
+                        logic_stats[idx]["total_predictions"] += 1
+                        if vote == actual_res:
+                            logic_stats[idx]["correct_predictions"] += 1
+                        if logic_stats[idx]["total_predictions"] > 0:
+                            logic_stats[idx]["accuracy"] = (logic_stats[idx]["correct_predictions"] / logic_stats[idx]["total_predictions"]) * 100
+
+                fresh_votes = execute_500_logics(history)
+                t_data = {
+                    "all_500": {"b_w": 0, "s_w": 0, "cnt": 0},
+                    "tier_90": {"b_w": 0, "s_w": 0, "cnt": 0},
+                    "tier_80": {"b_w": 0, "s_w": 0, "cnt": 0},
+                    "tier_70": {"b_w": 0, "s_w": 0, "cnt": 0},
+                }
+
+                for idx, vote in fresh_votes.items():
+                    acc = logic_stats[idx]["accuracy"]
+                    t_data["all_500"]["cnt"] += 1
+                    if vote == "BIG": t_data["all_500"]["b_w"] += 1
+                    else: t_data["all_500"]["s_w"] += 1
+
+                    if acc >= 90.0:
+                        t_data["tier_90"]["cnt"] += 1
+                        if vote == "BIG": t_data["tier_90"]["b_w"] += 1
+                        else: t_data["tier_90"]["s_w"] += 1
+                    elif acc >= 80.0:
+                        t_data["tier_80"]["cnt"] += 1
+                        if vote == "BIG": t_data["tier_80"]["b_w"] += 1
+                        else: t_data["tier_80"]["s_w"] += 1
+                    elif acc >= 70.0:
+                        t_data["tier_70"]["cnt"] += 1
+                        if vote == "BIG": t_data["tier_70"]["b_w"] += 1
+                        else: t_data["tier_70"]["s_w"] += 1
+
+                new_preds = {}
+                for tier_name, metrics in t_data.items():
+                    pred = "BIG" if metrics["b_w"] >= metrics["s_w"] else "SMALL" if metrics["cnt"] > 0 else "WAIT"
+                    new_preds[tier_name] = pred
+                    dashboard_data["tiers"][tier_name] = {
+                        "prediction": pred, "votes_big": metrics["b_w"], "votes_small": metrics["s_w"], "active_count": metrics["cnt"]
                     }
 
-                    for idx, vote in fresh_votes.items():
-                        acc = logic_stats[idx]["accuracy"]
-                        t_data["all_500"]["cnt"] += 1
-                        if vote == "BIG": t_data["all_500"]["b_w"] += 1
-                        else: t_data["all_500"]["s_w"] += 1
-
-                        if acc >= 90.0:
-                            t_data["tier_90"]["cnt"] += 1
-                            if vote == "BIG": t_data["tier_90"]["b_w"] += 1
-                            else: t_data["tier_90"]["s_w"] += 1
-                        elif acc >= 80.0:
-                            t_data["tier_80"]["cnt"] += 1
-                            if vote == "BIG": t_data["tier_80"]["b_w"] += 1
-                            else: t_data["tier_80"]["s_w"] += 1
-                        elif acc >= 70.0:
-                            t_data["tier_70"]["cnt"] += 1
-                            if vote == "BIG": t_data["tier_70"]["b_w"] += 1
-                            else: t_data["tier_70"]["s_w"] += 1
-
-                    new_preds = {}
-                    for tier_name, metrics in t_data.items():
-                        pred = "BIG" if metrics["b_w"] >= metrics["s_w"] else "SMALL" if metrics["cnt"] > 0 else "WAIT"
-                        new_preds[tier_name] = pred
-                        dashboard_data["tiers"][tier_name] = {
-                            "prediction": pred, "votes_big": metrics["b_w"], "votes_small": metrics["s_w"], "active_count": metrics["cnt"]
-                        }
-
-                    current_predictions_held = new_preds
-                    dashboard_data.update({"last_issue": issue, "actual_number": actual_num, "actual_result": actual_res, "stage": stage, "investment": amount})
-                    last_processed_issue = issue
-                    data_fetched = True
-                    break
-            except Exception:
-                continue # Agar ek proxy fail ho to agly par switch kry
+                current_predictions_held = new_preds
+                dashboard_data.update({"last_issue": issue, "actual_number": actual_num, "actual_result": actual_res, "stage": stage, "investment": amount})
+                last_processed_issue = issue
+                data_fetched = True
+                
+        except Exception:
+            # Agar proxy dead ho ya block ho toh list se hatao aur agli loop chalao
+            if proxy_ip in scraped_proxies:
+                scraped_proxies.remove(proxy_ip)
+            continue 
                 
         if data_fetched:
             time.sleep(3)
         else:
-            time.sleep(5) # Agar sab network blocks hon to thora wait kry
+            time.sleep(1)
 
 threading.Thread(target=background_brain_runner, daemon=True).start()
 
