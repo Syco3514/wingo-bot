@@ -6,7 +6,6 @@ import requests
 
 app = FastAPI()
 
-# CORS allow karo taake frontend access kar sake
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,10 +19,9 @@ HEADERS = {
     "Accept": "application/json, text/plain, */*",
     "Referer": "https://pakgames.pro/",
     "Origin": "https://pakgames.pro",
-    "User-Agent": "Mozilla/5.0",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 }
 
-# --- GLOBAL DATA STRUCTURES ---
 last_issue = None
 game_history = []
 logics_stats = [{"id": i, "wins": 0, "total": 0, "last_pred": None} for i in range(1, 201)]
@@ -83,7 +81,19 @@ def prediction_engine():
             ts = int(time.time() * 1000)
             url = f"{API_URL}?ts={ts}"
             res = requests.get(url, headers=HEADERS, timeout=10)
-            data = res.json()
+            
+            # Agar API response 200 OK nahi de rahi
+            if res.status_code != 200:
+                print(f"[Engine Warning] API returned status code {res.status_code}. Possible Cloudflare block.")
+                time.sleep(5)
+                continue
+                
+            try:
+                data = res.json()
+            except ValueError:
+                print(f"[Engine Error] Response is not JSON. Text snippet: {res.text[:200]}")
+                time.sleep(5)
+                continue
             
             if data.get("code") == 0 and data.get("data"):
                 latest_data = data["data"]["list"][0]
@@ -154,10 +164,9 @@ def prediction_engine():
                 
             time.sleep(2)
         except Exception as e:
-            print(f"[Engine Error]: {e}")
+            print(f"[Engine Fatal Error]: {e}")
             time.sleep(5)
 
-# Background engine thread start karein
 threading.Thread(target=prediction_engine, daemon=True).start()
 
 @app.get("/api/data")
