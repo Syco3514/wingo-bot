@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+
 from database import *
 from collector import *
 from logic_engine import *
@@ -15,40 +16,31 @@ init_db()
 def home():
 
     return {
-        "status":"Wingo AI Running"
+    "status":"Wingo AI V2 Running"
     }
-
 
 
 
 @app.get("/predict")
 def predict():
 
-    try:
-
-        history=get_history()
-
-        result=vote(history)
+    history=get_history()
 
 
-        return {
-
-        "history":history,
-        "prediction":result["prediction"],
-        "votes":result["votes"]
-
-        }
+    result=all_predictions(history)
 
 
-    except Exception as e:
+    return {
 
-        return {
-            "error":str(e)
-        }
+    "history":history,
+
+    "predictions":result
+
+    }
 
 
 
 @app.get("/stats")
 def stats():
 
-    return get_stats()
+    return get_all()
