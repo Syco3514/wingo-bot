@@ -4,37 +4,52 @@ import sqlite3
 DB="logic.db"
 
 
-def db():
-
+def con():
     return sqlite3.connect(DB)
 
 
 
 def init_db():
 
-    con=db()
-    cur=con.cursor()
+    c=con()
+    cur=c.cursor()
+
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS stats(
 
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    logic TEXT UNIQUE,
+    logic TEXT PRIMARY KEY,
     win INTEGER DEFAULT 0,
     loss INTEGER DEFAULT 0
 
     )
     """)
 
-    con.commit()
-    con.close()
+
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS predictions(
+
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    issue TEXT,
+    logic TEXT,
+    prediction TEXT,
+    actual TEXT,
+    result TEXT
+
+    )
+    """)
+
+
+    c.commit()
+    c.close()
 
 
 
 def add_logic(name):
 
-    con=db()
-    cur=con.cursor()
+    c=con()
+    cur=c.cursor()
 
     cur.execute(
     """
@@ -44,18 +59,18 @@ def add_logic(name):
     (name,)
     )
 
-    con.commit()
-    con.close()
+    c.commit()
+    c.close()
 
 
 
-def update_logic(name,result):
+def update_stat(name,win):
 
-    con=db()
-    cur=con.cursor()
+    c=con()
+    cur=c.cursor()
 
 
-    if result:
+    if win:
 
         cur.execute(
         """
@@ -78,45 +93,69 @@ def update_logic(name,result):
         )
 
 
-    con.commit()
-    con.close()
+    c.commit()
+    c.close()
 
 
 
-def get_all():
+def save_prediction(issue,logic,pred,actual,result):
 
-    con=db()
-    cur=con.cursor()
+    c=con()
+    cur=c.cursor()
 
+
+    cur.execute(
+    """
+    INSERT INTO predictions
+    (issue,logic,prediction,actual,result)
+    VALUES(?,?,?,?,?)
+    """,
+    (
+    issue,
+    logic,
+    pred,
+    actual,
+    result
+    )
+    )
+
+
+    c.commit()
+    c.close()
+
+
+
+def get_stats():
+
+    c=con()
+    cur=c.cursor()
 
     cur.execute(
     "SELECT * FROM stats"
     )
 
-
     rows=cur.fetchall()
-
 
     data=[]
 
 
     for r in rows:
 
-        total=r[2]+r[3]
+        total=r[1]+r[2]
 
         rate=0
 
         if total:
             rate=round(
-            r[2]/total*100,2
+            r[1]/total*100,2
             )
 
 
         data.append({
 
-        "logic":r[1],
-        "win":r[2],
-        "loss":r[3],
+        "logic":r[0],
+        "win":r[1],
+        "loss":r[2],
         "rate":rate
 
         })
