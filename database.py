@@ -4,21 +4,25 @@ import sqlite3
 DB="logic.db"
 
 
-def connect():
+def db():
+
     return sqlite3.connect(DB)
+
 
 
 def init_db():
 
-    con=connect()
+    con=db()
     cur=con.cursor()
 
     cur.execute("""
-    CREATE TABLE IF NOT EXISTS logic_stats(
-        id INTEGER PRIMARY KEY,
-        logic TEXT,
-        win INTEGER,
-        loss INTEGER
+    CREATE TABLE IF NOT EXISTS stats(
+
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    logic TEXT UNIQUE,
+    win INTEGER DEFAULT 0,
+    loss INTEGER DEFAULT 0
+
     )
     """)
 
@@ -27,39 +31,50 @@ def init_db():
 
 
 
-def save_result(logic,win):
+def add_logic(name):
 
-    con=connect()
+    con=db()
     cur=con.cursor()
 
     cur.execute(
-    "SELECT * FROM logic_stats WHERE logic=?",
-    (logic,)
+    """
+    INSERT OR IGNORE INTO stats(logic)
+    VALUES(?)
+    """,
+    (name,)
     )
 
-    data=cur.fetchone()
+    con.commit()
+    con.close()
 
 
-    if data:
 
-        if win:
-            cur.execute(
-            "UPDATE logic_stats SET win=win+1 WHERE logic=?",
-            (logic,)
-            )
+def update_logic(name,result):
 
-        else:
-            cur.execute(
-            "UPDATE logic_stats SET loss=loss+1 WHERE logic=?",
-            (logic,)
-            )
+    con=db()
+    cur=con.cursor()
 
+
+    if result:
+
+        cur.execute(
+        """
+        UPDATE stats
+        SET win=win+1
+        WHERE logic=?
+        """,
+        (name,)
+        )
 
     else:
 
         cur.execute(
-        "INSERT INTO logic_stats(logic,win,loss) VALUES(?,?,?)",
-        (logic,1 if win else 0,0 if win else 1)
+        """
+        UPDATE stats
+        SET loss=loss+1
+        WHERE logic=?
+        """,
+        (name,)
         )
 
 
@@ -68,18 +83,22 @@ def save_result(logic,win):
 
 
 
-def get_stats():
+def get_all():
 
-    con=connect()
+    con=db()
     cur=con.cursor()
 
+
     cur.execute(
-    "SELECT * FROM logic_stats"
+    "SELECT * FROM stats"
     )
+
 
     rows=cur.fetchall()
 
-    result=[]
+
+    data=[]
+
 
     for r in rows:
 
@@ -88,10 +107,12 @@ def get_stats():
         rate=0
 
         if total:
-            rate=round((r[2]/total)*100,2)
+            rate=round(
+            r[2]/total*100,2
+            )
 
 
-        result.append({
+        data.append({
 
         "logic":r[1],
         "win":r[2],
@@ -101,4 +122,4 @@ def get_stats():
         })
 
 
-    return result
+    return data
