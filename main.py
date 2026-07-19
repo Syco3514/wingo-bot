@@ -1,0 +1,46 @@
+from fastapi import FastAPI
+from database import *
+from collector import *
+from logic_engine import *
+
+
+app=FastAPI()
+
+
+init_db()
+
+
+
+@app.get("/")
+def home():
+
+    return {
+        "status":"Wingo AI Running"
+    }
+
+
+
+
+@app.get("/predict")
+def predict():
+
+    history=get_history()
+
+
+    result=vote(history)
+
+
+    return {
+
+    "history":history,
+    "prediction":result["prediction"],
+    "votes":result["votes"]
+
+    }
+
+
+
+@app.get("/stats")
+def stats():
+
+    return get_stats()
