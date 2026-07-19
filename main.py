@@ -24,19 +24,27 @@ def home():
 @app.get("/predict")
 def predict():
 
-    history=get_history()
+    try:
+
+        history=get_history()
+
+        result=vote(history)
 
 
-    result=vote(history)
+        return {
+
+        "history":history,
+        "prediction":result["prediction"],
+        "votes":result["votes"]
+
+        }
 
 
-    return {
+    except Exception as e:
 
-    "history":history,
-    "prediction":result["prediction"],
-    "votes":result["votes"]
-
-    }
+        return {
+            "error":str(e)
+        }
 
 
 
