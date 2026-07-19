@@ -1,14 +1,17 @@
 from fastapi import FastAPI
 
-from database import *
-from collector import *
-from logic_engine import *
+from database import init_db
+from collector import get_history
 
 
-app=FastAPI()
-
-
+# pehle database banao
 init_db()
+
+
+from logic_engine import all_predictions
+
+
+app = FastAPI()
 
 
 
@@ -16,7 +19,7 @@ init_db()
 def home():
 
     return {
-    "status":"Wingo AI V2 Running"
+        "status":"Wingo AI V2 Running"
     }
 
 
@@ -24,17 +27,15 @@ def home():
 @app.get("/predict")
 def predict():
 
-    history=get_history()
+    history = get_history()
 
-
-    result=all_predictions(history)
+    result = all_predictions(history)
 
 
     return {
 
-    "history":history,
-
-    "predictions":result
+        "history":history,
+        "predictions":result
 
     }
 
@@ -42,5 +43,7 @@ def predict():
 
 @app.get("/stats")
 def stats():
+
+    from database import get_all
 
     return get_all()
