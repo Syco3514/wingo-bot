@@ -1,76 +1,155 @@
 import random
+from database import *
 
 
-def bs(number):
+def bs(n):
 
-    return "SMALL" if int(number)<=4 else "BIG"
+    if int(n)<=4:
+        return "SMALL"
 
-
-
-# Example logic collection
-# Yahan future me 200 logics add ho sakte hain
-
-
-def logic_1(history):
-
-    last=int(history[0])
-
-    return bs(last)
+    return "BIG"
 
 
 
-def logic_2(history):
+# 200 logic generator
 
-    nums=list(map(int,history[:5]))
-
-    avg=sum(nums)/len(nums)
-
-    return "SMALL" if avg<5 else "BIG"
+def create_logics():
 
 
-
-def logic_3(history):
-
-    return random.choice(
-        ["SMALL","BIG"]
-    )
+    logics={}
 
 
+    for i in range(1,201):
 
-LOGICS={
-
-"logic_1":logic_1,
-"logic_2":logic_2,
-"logic_3":logic_3
-
-}
+        name=f"logic_{i}"
 
 
+        def logic(history):
 
-def vote(history):
-
-    result={
-        "SMALL":0,
-        "BIG":0
-    }
+            mode=i%5
 
 
-    for name,func in LOGICS.items():
-
-        pred=func(history)
-
-        result[pred]+=1
+            nums=list(
+            map(int,history)
+            )
 
 
-    final=max(
-        result,
-        key=result.get
-    )
+            if mode==0:
+
+                return bs(nums[0])
+
+
+            elif mode==1:
+
+                return bs(
+                sum(nums[:3])//3
+                )
+
+
+            elif mode==2:
+
+                return bs(
+                max(nums[:5])
+                )
+
+
+            elif mode==3:
+
+                return bs(
+                min(nums[:5])
+                )
+
+
+            else:
+
+                return random.choice(
+                ["SMALL","BIG"]
+                )
+
+
+        logics[name]=logic
+        add_logic(name)
+
+
+    return logics
+
+
+
+LOGICS=create_logics()
+
+
+
+def voting(history,minimum=0):
+
+
+    small=0
+    big=0
+
+
+    active=[]
+
+
+    stats=get_all()
+
+
+    for s in stats:
+
+        if s["rate"]>=minimum:
+
+            active.append(
+            s["logic"]
+            )
+
+
+    for name in active:
+
+
+        pred=LOGICS[name](history)
+
+
+        if pred=="SMALL":
+            small+=1
+
+        else:
+            big+=1
+
 
 
     return {
 
-    "prediction":final,
-    "votes":result
+    "SMALL":small,
+    "BIG":big,
+
+    "final":
+    "SMALL"
+    if small>big
+    else "BIG"
+
+    }
+
+
+
+
+def all_predictions(history):
+
+
+    return {
+
+
+    "prediction_1":
+    voting(history,0),
+
+
+    "prediction_2":
+    voting(history,90),
+
+
+    "prediction_3":
+    voting(history,80),
+
+
+    "prediction_4":
+    voting(history,70)
+
 
     }
