@@ -1,22 +1,18 @@
 import random
+
 from database import *
+
 
 
 def bs(n):
 
-    if int(n)<=4:
-        return "SMALL"
-
-    return "BIG"
+    return "SMALL" if int(n)<=4 else "BIG"
 
 
-
-# 200 logic generator
 
 def create_logics():
 
-
-    logics={}
+    logs={}
 
 
     for i in range(1,201):
@@ -24,54 +20,48 @@ def create_logics():
         name=f"logic_{i}"
 
 
-        def logic(history):
+        def logic(history,i=i):
 
-            mode=i%5
+            nums=list(map(int,history))
 
 
-            nums=list(
-            map(int,history)
-            )
+            mode=i%6
 
 
             if mode==0:
-
                 return bs(nums[0])
 
 
-            elif mode==1:
-
-                return bs(
-                sum(nums[:3])//3
-                )
+            if mode==1:
+                return bs(sum(nums[:3])/3)
 
 
-            elif mode==2:
-
-                return bs(
-                max(nums[:5])
-                )
+            if mode==2:
+                return bs(max(nums[:5]))
 
 
-            elif mode==3:
-
-                return bs(
-                min(nums[:5])
-                )
+            if mode==3:
+                return bs(min(nums[:5]))
 
 
-            else:
+            if mode==4:
 
-                return random.choice(
-                ["SMALL","BIG"]
-                )
+                return "SMALL" if nums.count(1)>nums.count(8) else "BIG"
 
 
-        logics[name]=logic
+            return random.choice(
+            ["SMALL","BIG"]
+            )
+
+
+
+        logs[name]=logic
+
         add_logic(name)
 
 
-    return logics
+    return logs
+
 
 
 
@@ -79,39 +69,49 @@ LOGICS=create_logics()
 
 
 
-def voting(history,minimum=0):
+def weighted_vote(history):
 
 
     small=0
     big=0
 
 
-    active=[]
-
-
-    stats=get_all()
+    stats=get_stats()
 
 
     for s in stats:
 
-        if s["rate"]>=minimum:
 
-            active.append(
-            s["logic"]
-            )
+        name=s["logic"]
+
+        rate=s["rate"]
 
 
-    for name in active:
+        weight=1
+
+
+        if rate>=90:
+            weight=5
+
+        elif rate>=80:
+            weight=4
+
+        elif rate>=70:
+            weight=3
+
 
 
         pred=LOGICS[name](history)
 
 
+
         if pred=="SMALL":
-            small+=1
+
+            small+=weight
 
         else:
-            big+=1
+
+            big+=weight
 
 
 
@@ -124,32 +124,5 @@ def voting(history,minimum=0):
     "SMALL"
     if small>big
     else "BIG"
-
-    }
-
-
-
-
-def all_predictions(history):
-
-
-    return {
-
-
-    "prediction_1":
-    voting(history,0),
-
-
-    "prediction_2":
-    voting(history,90),
-
-
-    "prediction_3":
-    voting(history,80),
-
-
-    "prediction_4":
-    voting(history,70)
-
 
     }
